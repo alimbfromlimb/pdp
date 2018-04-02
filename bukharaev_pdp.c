@@ -87,7 +87,6 @@ void load_file( ) {
 	}
 	unsigned int adress, n;
 	int i;
-	//int c = 0;
 	while(1) {
 		if (2 != fscanf (f_in, "%x%x", &adress, &n))
 			return;
