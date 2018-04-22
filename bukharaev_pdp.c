@@ -1,21 +1,15 @@
-﻿/* Program: files.c
-   Build me with
-     gcc -o files files.c
-*/
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
 
-/*
-#define LO(x) (x & 0xFF)
-#define HI(x) (((x>>8) & 0xFF))
-*/
-
 #define NO_PARAM 0
 #define HAS_XX 1
 #define HAS_SS (1<<1)
 #define HAS_DD (1<<2)
+#define HAS_NN (1<<3)
+#define HAS_R6 (1<<4)
+#define HAS_R4 (1<<5)
 
 #define RELEASE 0
 #define DEBUG 1
@@ -31,7 +25,7 @@ typedef word adr;
 
 byte mem[64*1024];
 
-// PLEASE MIND THAT FIRST 16 BYTES ARE NOT AVAILABLE AS RAM
+// PLEASE MIND THAT THE FIRST 16 BYTES ARE NOT AVAILABLE AS RAM
 
 word reg[8];
 #define sp reg[6]
@@ -45,6 +39,8 @@ word w_read (adr a);
 void do_halt();
 void do_mov();
 void do_add();
+void do_sob();
+void do_clr();
 void do_unknown();
 void load_file();
 void mem_dump(adr start, word n);
@@ -57,6 +53,8 @@ struct SSDD {
 	adr a;
 } ss, dd;
 
+int R4, R6, nn;
+
 struct Command {
 	word opcode;
 	word mask;
@@ -68,6 +66,8 @@ struct Command {
 	{0010000, 0170000, "mov",		do_mov, 	HAS_SS | HAS_DD},
 	{0060000, 0170000, "add",		do_add, 	HAS_SS | HAS_DD},	
 	{0000000, 0177777, "halt",		do_halt, 	NO_PARAM},
+	{0077000, 0177000, "sob",		do_sob, 	HAS_R4 | HAS_NN},
+	{0005000, 0177700, "clr",		do_clr, 	HAS_DD}, 
 	{0000000, 0170000, "unknown", 	do_unknown, NO_PARAM}	
 };
 
@@ -107,7 +107,7 @@ struct SSDD get_mode (word w) {
 					printf("@(R%d)+ ", n);
 				}
 				else {
-					printf(" #%o ", result.val);
+					printf(" @#%o ", result.val);
 				}
 
 				reg[n]+=2;
@@ -122,10 +122,7 @@ struct SSDD get_mode (word w) {
 				else {
 					printf(" #%o ", result.val);
 				}
-				break; 
-		case 5:
-				
-		
+				break; 				
 		default:
 				printf("Esche ne prohodily 7:( \n");
 	}
@@ -166,7 +163,7 @@ void w_write (adr a, word x) {
 		mem[a] = (byte)(x & 0xFF);
 		mem[a+1] = (byte)((x >> 8) & 0xFF);
 	} else {
-		reg[a] = x;
+		reg[a] = x & 0xFF;
 	}		
 }
 word w_read (adr a) {
@@ -183,6 +180,7 @@ void mem_dump(adr start, word n) {
 	}	
 }
 void do_halt() {
+	printf("\n");
 	print_reg();
 	printf("THE END!\n");
 	exit(0);
@@ -196,6 +194,15 @@ void do_mov() {
 	//write(dd.a) = ss.val;
 	w_write(dd.a, ss.val);
 	return;
+}
+void do_sob() {
+    reg[R4]--;
+    if (reg[R4] != 0)
+        pc = pc - 2*nn;
+    printf("R%d\n", R4);
+}
+void do_clr() {
+	w_write(dd.a, 0);
 }
 void do_unknown() {
 	printf("UNKNOWN :(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
@@ -232,7 +239,7 @@ void run() {
 		word w = w_read(pc) & 0xffff;
 		fprintf(stdout, "%06o: %06o ", pc, w);
 		pc += 2;		
-		for(int i = 0; i < 4 ; i++) {
+		for(int i = 0; ; i++) {
 			struct Command cmd = command[i];
 			if ((w & cmd.mask) == cmd.opcode) {
 				printf("%s ", cmd.name);
@@ -241,22 +248,22 @@ void run() {
 					ss = get_mode(w>>6);
 				if(cmd.param & HAS_DD)
 					dd = get_mode(w);
-				/*
-				// dissection of arguments
-				if (cmd.param & HAS_SS) {
-					//ss = get_mr(w);
-				}
-				if () {
-					
-				}
-				//~ if (cmd.param & HAS_NN) {
-					//~ //nn = get_nn(w);
-				//~ }	
-				*/			
-				printf("\n");
+				if(cmd.param & HAS_R4)
+					R4 = (w >> 6)&7;
+				if(cmd.param & HAS_R6)
+					R6 = (w		)&7;
+				if(cmd.param & HAS_NN)
+					nn = w & 63;		
 				cmd.do_func();
+				printf("\n");
+				/*
+				 * WHAT'S INSIDE THE REGISTERS AT THE MOMENT???
+				printf("\n");
+				printf("* * * * * * * * * * * * *\n");
 				print_reg();
+				printf("* * * * * * * * * * * * *\n");
 				break;
+				*/
 				//count++;
 			}
 		}
@@ -266,7 +273,20 @@ void run() {
 		*/
 	}	
 }
+void test_mem() {
+	b_write(2, 0x0a);
+	b_write(3, 0x0b);
+	word w = w_read(2);
+	printf("0b0a = %hx\n", w);	
+	w_write(4, 0x0d0c);
+	byte b4 = b_read(4);
+	byte b5 = b_read(5);
+	printf("0d0c = %hx %hx \n", b5, b4);
+}
 /*
+#define LO(x) (x & 0xFF)
+#define HI(x) (((x>>8) & 0xFF))
+
 void test_mem() {
 	byte b0, b1;
 	word w;
@@ -282,14 +302,3 @@ void test_mem() {
 	assert(b1 == 0x0b);
 }
 */
-void test_mem() {
-	b_write(2, 0x0a);
-	b_write(3, 0x0b);
-	word w = w_read(2);
-	printf("0b0a = %hx\n", w);	
-	w_write(4, 0x0d0c);
-	byte b4 = b_read(4);
-	byte b5 = b_read(5);
-	printf("0d0c = %hx %hx \n", b5, b4);
-}
-
