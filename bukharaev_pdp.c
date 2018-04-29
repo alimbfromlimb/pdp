@@ -2,73 +2,100 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
-
+//These macroses will ILLUSTRATE parameters a word has
 #define NO_PARAM 0
-#define HAS_XX 1
-#define HAS_SS (1<<1)
-#define HAS_DD (1<<2)
-#define HAS_NN (1<<3)
-#define HAS_R6 (1<<4)
-#define HAS_R4 (1<<5)
-
+#define HAS_XX 1		//Has this strange thing called XX
+#define HAS_SS (1<<1) 	//Has source
+#define HAS_DD (1<<2) 	//Has destination
+#define HAS_NN (1<<3) 	//Has this strange thing called NN
+#define HAS_R4 (1<<4) 	//The register byte is on the fourth place: ***R**
+#define HAS_R6 (1<<5) 	//The register byte is on the sixth  place: *****R
+//I don't actually understand why we need these but...
+//...the teacher made us implement them 
 #define RELEASE 0
 #define DEBUG 1
 #define FULL_DEBUG 2
 
 int debug_level = DEBUG;
 
-//int dbg_lvl = debug_level;
-
 typedef unsigned int byte;
 typedef int word;
 typedef word adr;
 
 byte mem[64*1024];
-
 // PLEASE MIND THAT THE FIRST 16 BYTES ARE NOT AVAILABLE AS RAM
-
+// THEY ARE "REGISTERS"
 word reg[8];
 #define sp reg[6]
 #define pc reg[7]
 
+//tracing
 void trace(int dbg_lvl, char * format, ...);
+//basic functions
 void b_write (adr a, byte x);
 byte b_read (adr a);
 void w_write (adr a, word x);
 word w_read (adr a);
+//emulated functions
 void do_halt();
 void do_mov();
+void do_movb();
 void do_add();
 void do_sob();
 void do_clr();
+void do_jmp();
+void do_br();
+void do_beq();
+void do_rts();
+void do_jsr();
+void do_tstb();
+void do_bpl();
 void do_unknown();
+//other functions
 void load_file();
 void mem_dump(adr start, word n);
 void run();
 void print_reg();
+void NZVC(word x);
 void test_mem();
-
+//this will help us write functions
 struct SSDD {
 	word val;
 	adr a;
 } ss, dd;
 
-int R4, R6, nn;
+int R4, R6, nn, xx;
+//The only reason we need N, Z, V, C is to simplify the implementation
+//of some crazy functions
+short int N, Z, V, C, BYTE;
+
+int odata = 0177566;
+int wread, bread;
 
 struct Command {
 	word opcode;
 	word mask;
+	short int byte_or_not;
 	const char * name;
 	void (*do_func)();
 	byte param;
 			
 }	command[] = {
-	{0010000, 0170000, "mov",		do_mov, 	HAS_SS | HAS_DD},
-	{0060000, 0170000, "add",		do_add, 	HAS_SS | HAS_DD},	
-	{0000000, 0177777, "halt",		do_halt, 	NO_PARAM},
-	{0077000, 0177000, "sob",		do_sob, 	HAS_R4 | HAS_NN},
-	{0005000, 0177700, "clr",		do_clr, 	HAS_DD}, 
-	{0000000, 0170000, "unknown", 	do_unknown, NO_PARAM}	
+	{0010000, 0170000, 0, "mov",		do_mov, 	HAS_SS | HAS_DD},
+	{0110000, 0170000, 1, "movb",		do_movb, 	HAS_SS | HAS_DD},	
+	{0060000, 0170000, 0, "add",		do_add, 	HAS_SS | HAS_DD},	
+	{0000000, 0177777, 0, "halt",		do_halt, 	NO_PARAM},
+	{0077000, 0177000, 0, "sob",		do_sob, 	HAS_R4 | HAS_NN},
+	{0005000, 0177700, 0, "clr",		do_clr, 	HAS_DD}, 
+	{0000100, 0177700, 0, "jmp",		do_jmp, 	HAS_DD},
+	{0000400, 0177700, 0, "br",			do_br, 		HAS_XX},
+	{0001400, 0177700, 0, "beq",		do_beq,		HAS_XX},		
+	{0000200, 0177770, 0, "rts",      	do_rts,     HAS_R6},
+	{0004000, 0177000, 0, "jsr",       	do_jsr,     HAS_R4 | HAS_DD},
+	{0105700, 0177700, 1, "tstb",     	do_tstb,    HAS_DD},
+	{0100000, 0177700, 1, "bpl",  		do_bpl,     HAS_XX},
+	{0000000, 0170000, 0, "UNKNOWN", 	do_unknown, NO_PARAM}
+	//jsr, movb, beq, tstb, bpl, rts	
 };
 
 struct SSDD get_mode (word w) {
@@ -83,26 +110,36 @@ struct SSDD get_mode (word w) {
 				break;
 		case 1:
 				result.a = reg[n];
-				result.val = w_read(result.a);
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
 				printf("(R%d) ", n);
+				
 				break;
 		case 2:
 				result.a = reg[n];
-				result.val = w_read(result.a);
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
 				if (n != 7) {
 					printf("(R%d)+ ", n);
 				}
 				else {
 					printf(" #%o ", result.val);
 				}
-				reg[n]+=2;
-				break;
-				
-		//СПРОСИТЬ ПРО ТРЕТИЙ, ЧЕТВЁРТЫЙ И ПЯТЫЙ КЕЙСЫ, ПОЧЕМУ КАРТИНКИ В ПРЕЗЕНТАЦИИ ОДНИ, А КОД ДРУГОЙ?!		
-				
+				reg[n] = BYTE ? (reg[n] + 1) : (reg[n] + 2);
+				break;		
 		case 3:
 				result.a = w_read(reg[n]);
-				result.val = w_read(result.a);
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
 				if (n != 7) {
 					printf("@(R%d)+ ", n);
 				}
@@ -110,21 +147,49 @@ struct SSDD get_mode (word w) {
 					printf(" @#%o ", result.val);
 				}
 
-				reg[n]+=2;
+				reg[n] = BYTE ? (reg[n] + 1) : (reg[n] + 2);
 				break;
 		case 4:
-				reg[n] -= 2;
+				reg[n] = BYTE ? (reg[n] - 1) : (reg[n] - 2);
 				result.a = reg[n];
-				result.val = w_read(result.a);
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
 				if (n != 7) {
 					printf("-(R%d) ", n);
 				}
 				else {
 					printf(" #%o ", result.val);
 				}
-				break; 				
+				break;
+		case 6:
+				Z = w_read(pc);
+				pc += 2;
+				result.a = reg[n];
+				result.a += Z;
+				result.a &= 0xFFFF;
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
+				if (n == 7) {
+					if (result.a == odata) {
+						printf(",%.6o ", result.a);
+					}
+					else {
+						printf(" #%.6o ", result.val);
+					}
+				}
+				else {
+					printf("%.6o(R%o) ", Z, n);
+				}
+				break;		 				
 		default:
 				printf("Esche ne prohodily 7:( \n");
+				break;
 	}
 	return result;
 }
@@ -152,7 +217,11 @@ void print_reg() {
 	}
 }
 void b_write (adr a, byte x) {
-	mem[a] = x;	
+	if (a > 15) {
+		mem[a] = x;
+	} else {
+		reg[a] = x & 0xFF;
+	}			
 }
 byte b_read (adr a) {
 	return mem[a];	
@@ -172,13 +241,6 @@ word w_read (adr a) {
     res = (word)(mem[a]) | (word)(mem[a+1] << 8);
     return res;        
 }
-void mem_dump(adr start, word n) {
-	int i;
-	for (i = 0; i < n; i += 2) {
-		word res = w_read(start + i);		
-		trace(debug_level, "%06o : %06o\n", start + i, res);
-	}	
-}
 void do_halt() {
 	printf("\n");
 	print_reg();
@@ -188,11 +250,19 @@ void do_halt() {
 void do_add() {
 	//write(dd.a) = ss.val + dd.val;
 	w_write(dd.a, dd.val + ss.val);
+	NZVC(dd.val + ss.val);
 	return;
 }
 void do_mov() {
 	//write(dd.a) = ss.val;
 	w_write(dd.a, ss.val);
+	NZVC(ss.val);
+	return;
+}
+void do_movb() {
+	//write(dd.a) = ss.val;
+	b_write(dd.a, ss.val);
+	NZVC(ss.val);
 	return;
 }
 void do_sob() {
@@ -200,12 +270,42 @@ void do_sob() {
     if (reg[R4] != 0)
         pc = pc - 2*nn;
     printf("R%d\n", R4);
+	NZVC(pc);
 }
 void do_clr() {
 	w_write(dd.a, 0);
+	NZVC(0);
+}
+void do_jmp() {
+	pc = dd.a;
+}
+void do_br() {
+	pc = pc + 2*xx;	
+}
+void do_beq() {
+	if (Z == 1)
+		do_br();
+	printf("%06o ", pc);
+}
+void do_jsr() {
+	/*
+	r = pc
+	pc = d
+	*/
+}
+void do_rts() {
+	
+}
+void do_bpl() {
+	if (N == 0) {
+		do_br();
+	}
+	printf("%06o ", pc);
+}
+void do_tstb() {
 }
 void do_unknown() {
-	printf("UNKNOWN :(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
+	printf(":(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
 	printf("YOU MAY HAVE A LOOK AT MY REGISTERS... IF YOU WILL :)\n");
 	print_reg();
 	return;
@@ -232,8 +332,19 @@ void load_file() {
 	}
 	fclose (f_in);	
 }
+void mem_dump(adr start, word n) {
+	printf("\nMEM DUMP\n");
+	int i;
+	for (i = 0; i < n; i += 2) {
+		word res = w_read(start + i);		
+		trace(debug_level, "%06o : %06o\n", start + i, res);
+	}	
+}
 void run() {
 	//int count = 0;
+	printf("\n");
+	printf("RUN!!!\n");
+	printf("\n");
 	pc = 01000;
 	while(1) {
 		word w = w_read(pc) & 0xffff;
@@ -242,6 +353,7 @@ void run() {
 		for(int i = 0; ; i++) {
 			struct Command cmd = command[i];
 			if ((w & cmd.mask) == cmd.opcode) {
+				BYTE = cmd.byte_or_not;
 				printf("%s ", cmd.name);
 				printf(" ");
 				if(cmd.param & HAS_SS)
@@ -253,24 +365,20 @@ void run() {
 				if(cmd.param & HAS_R6)
 					R6 = (w		)&7;
 				if(cmd.param & HAS_NN)
-					nn = w & 63;		
+					nn = w & 63;
+				if(cmd.param & HAS_XX)
+					xx = w & 255;					
 				cmd.do_func();
 				printf("\n");
-				/*
-				 * WHAT'S INSIDE THE REGISTERS AT THE MOMENT???
+				
+				// WHAT'S INSIDE THE REGISTERS AT THE MOMENT???
 				printf("\n");
 				printf("* * * * * * * * * * * * *\n");
 				print_reg();
 				printf("* * * * * * * * * * * * *\n");
 				break;
-				*/
-				//count++;
 			}
 		}
-		/*
-		if (count == 5)
-			break;
-		*/
 	}	
 }
 void test_mem() {
@@ -282,6 +390,11 @@ void test_mem() {
 	byte b4 = b_read(4);
 	byte b5 = b_read(5);
 	printf("0d0c = %hx %hx \n", b5, b4);
+}
+void NZVC(word x){
+	Z = (x == 0);
+	N = (BYTE ? x >> 7 : x >> 15) & 1;
+	C = (BYTE ? x >> 8 : x >> 16) & 1;
 }
 /*
 #define LO(x) (x & 0xFF)
