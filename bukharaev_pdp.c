@@ -23,7 +23,7 @@ typedef int word;
 typedef word adr;
 
 int u;
-
+//НУЖНО СДЕЛАТЬ ДОСТУПНЫМИ ПЕРВЫЕ БАЙТЫ ПАМЯТИ!!!
 byte mem[64*1024];
 // PLEASE MIND THAT THE FIRST 16 BYTES ARE NOT AVAILABLE AS RAM
 // THEY ARE "REGISTERS"
@@ -221,6 +221,9 @@ struct SSDD get_mode (word w) {
 	return result;
 }
 
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
+
 int main() {
 	load_file();
 	//mem_dump(0x40, 4);
@@ -228,6 +231,9 @@ int main() {
 	run();
 	return 0;
 }
+
+///////////////////////////////////////////////////
+///////////////////////////////////////////////////
 
 void trace(int dbg_lvl, char * format, ...) {
 	if (dbg_lvl != debug_level)
@@ -362,15 +368,13 @@ void do_tstb() {
 	printf("\n");
 	mem_dump(0x208, 6);
 	*/
-	
-	/*
 	NZVC(dd.val);
 	C = 0;
-	*/
-	
+	/*
 	N = (xx < 0) ? 1 : 0;
     Z = (xx == 0);
     C = 0;
+    */
 }
 void do_unknown() {
 	printf(":(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
@@ -485,4 +489,5 @@ void test_mem() {
 }
 * bukharaev_pdp.exe < mode6neg.pdp.o
 * bukharaev_pdp.exe < 0arr.txt.o
+* bukharaev_pdp.exe < char.pdp.o
 */
