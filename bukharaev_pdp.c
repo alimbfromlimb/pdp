@@ -1,4 +1,4 @@
-#include <stdio.h>
+﻿#include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -21,6 +21,8 @@ int debug_level = DEBUG;
 typedef unsigned int byte;
 typedef int word;
 typedef word adr;
+
+int u;
 
 byte mem[64*1024];
 // PLEASE MIND THAT THE FIRST 16 BYTES ARE NOT AVAILABLE AS RAM
@@ -69,8 +71,9 @@ int R4, R6, nn, xx;
 //of some crazy functions
 short int N, Z, V, C, BYTE;
 
-int odata = 0177566;
-int wread, bread;
+#define odata 0177566
+#define ostat 0177564
+
 
 struct Command {
 	word opcode;
@@ -81,20 +84,20 @@ struct Command {
 	byte param;
 			
 }	command[] = {
-	{0010000, 0170000, 0, "mov",		do_mov, 	HAS_SS | HAS_DD},
-	{0110000, 0170000, 1, "movb",		do_movb, 	HAS_SS | HAS_DD},	
-	{0060000, 0170000, 0, "add",		do_add, 	HAS_SS | HAS_DD},	
-	{0000000, 0177777, 0, "halt",		do_halt, 	NO_PARAM},
-	{0077000, 0177000, 0, "sob",		do_sob, 	HAS_R4 | HAS_NN},
-	{0005000, 0177700, 0, "clr",		do_clr, 	HAS_DD}, 
-	{0000100, 0177700, 0, "jmp",		do_jmp, 	HAS_DD},
-	{0000400, 0177700, 0, "br",			do_br, 		HAS_XX},
-	{0001400, 0177700, 0, "beq",		do_beq,		HAS_XX},		
-	{0000200, 0177770, 0, "rts",      	do_rts,     HAS_R6},
-	{0004000, 0177000, 0, "jsr",       	do_jsr,     HAS_R4 | HAS_DD},
-	{0105700, 0177700, 1, "tstb",     	do_tstb,    HAS_DD},
-	{0100000, 0177700, 1, "bpl",  		do_bpl,     HAS_XX},
-	{0000000, 0170000, 0, "UNKNOWN", 	do_unknown, NO_PARAM}
+	{0010000, 0170000, 	0, "mov",		do_mov, 	HAS_SS | HAS_DD},
+	{0110000, 0170000, 	1, "movb",		do_movb, 	HAS_SS | HAS_DD},	
+	{0060000, 0170000, 	0, "add",		do_add, 	HAS_SS | HAS_DD},	
+	{0000000, 0177777, 	0, "halt",		do_halt, 	NO_PARAM},
+	{0077000, 0177000, 	0, "sob",		do_sob, 	HAS_R4 | HAS_NN},
+	{0005000, 0177700, 	0, "clr",		do_clr, 	HAS_DD}, 
+	{0000100, 0177700, 	0, "jmp",		do_jmp, 	HAS_DD},
+	{0000400, 0177700,	0, "br",		do_br, 		HAS_XX},
+	{0001400, 0177700,	0, "beq",		do_beq,		HAS_XX},		
+	{0000200, 0177770, 	0, "rts",      	do_rts,     HAS_R6},
+	{0004000, 0177000, 	0, "jsr",       do_jsr,     HAS_R4 | HAS_DD},
+	{0105700, 0177700, 	1, "tstb",     	do_tstb,    HAS_DD},
+	{0100000, 0177400, 	1, "bpl",  		do_bpl,     HAS_XX},
+	{0000000, 0170000, 	0, "UNKNOWN", 	do_unknown, NO_PARAM}
 	//jsr, movb, beq, tstb, bpl, rts	
 };
 
@@ -120,7 +123,7 @@ struct SSDD get_mode (word w) {
 				break;
 		case 2:
 				result.a = reg[n];
-				if (BYTE) {
+				if ((BYTE)&(n!=6)&(n!=7)) {
 					result.val = b_read(result.a);
 				} else {
 					result.val = w_read(result.a);
@@ -131,7 +134,7 @@ struct SSDD get_mode (word w) {
 				else {
 					printf(" #%o ", result.val);
 				}
-				reg[n] = BYTE ? (reg[n] + 1) : (reg[n] + 2);
+				reg[n] = ((BYTE)&(n!=6)&(n!=7)) ? (reg[n] + 1) : (reg[n] + 2);
 				break;		
 		case 3:
 				result.a = w_read(reg[n]);
@@ -146,11 +149,10 @@ struct SSDD get_mode (word w) {
 				else {
 					printf(" @#%o ", result.val);
 				}
-
-				reg[n] = BYTE ? (reg[n] + 1) : (reg[n] + 2);
+				reg[n] += 2;				
 				break;
 		case 4:
-				reg[n] = BYTE ? (reg[n] - 1) : (reg[n] - 2);
+				reg[n] = ((BYTE)&(n!=6)&(n!=7)) ? (reg[n] - 1) : (reg[n] - 2);
 				result.a = reg[n];
 				if (BYTE) {
 					result.val = b_read(result.a);
@@ -164,27 +166,52 @@ struct SSDD get_mode (word w) {
 					printf(" #%o ", result.val);
 				}
 				break;
-		case 6:
-				Z = w_read(pc);
-				pc += 2;
-				result.a = reg[n];
-				result.a += Z;
-				result.a &= 0xFFFF;
+		case 5:
+				reg[n] -= 2;
+				result.a = w_read(reg[n]);
 				if (BYTE) {
 					result.val = b_read(result.a);
 				} else {
 					result.val = w_read(result.a);
 				}
-				if (n == 7) {
-					if (result.a == odata) {
-						printf(",%.6o ", result.a);
-					}
-					else {
-						printf(" #%.6o ", result.val);
-					}
+				if (n != 7) {
+					printf("@-(R%d) ", n);
 				}
 				else {
-					printf("%.6o(R%o) ", Z, n);
+					printf(" #%o ", result.val);
+				}
+				break;
+		case 6:
+				nn = w_read(pc);
+				pc += 2;
+				result.a = (reg[n] + nn) & 0177777;
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
+				if (n != 7) {
+					printf("%.6o(R%o) ", nn, n);
+				}
+				else {
+					printf(" #%o ", result.val);
+				}
+				break;
+		case 7:
+				nn = w_read(pc);
+				pc += 2;
+				result.a = w_read(reg[n]);
+				result.a = w_read((result.a + nn) & 0177777);
+				if (BYTE) {
+					result.val = b_read(result.a);
+				} else {
+					result.val = w_read(result.a);
+				}
+				if (n != 7) {
+					printf("@%.6o(R%o) ", nn, n);
+				}
+				else {
+					printf(" #%o ", result.val);
 				}
 				break;		 				
 		default:
@@ -250,12 +277,23 @@ void do_halt() {
 void do_add() {
 	//write(dd.a) = ss.val + dd.val;
 	w_write(dd.a, dd.val + ss.val);
+	/*
+	printf("dd.val is: %06o\n", dd.val);
+	printf("dd.val+ss.val is: %06o\n", dd.val+ss.val);
+	printf("\n");
+	mem_dump(0x208, 6);
+	*/
 	NZVC(dd.val + ss.val);
 	return;
 }
 void do_mov() {
 	//write(dd.a) = ss.val;
 	w_write(dd.a, ss.val);
+	/*
+	printf("ss.val is: %06o\n", ss.val);
+	printf("\n");
+	mem_dump(0x208, 6);
+	*/
 	NZVC(ss.val);
 	return;
 }
@@ -268,7 +306,7 @@ void do_movb() {
 void do_sob() {
     reg[R4]--;
     if (reg[R4] != 0)
-        pc = pc - 2*nn;
+        pc = pc - (2 * nn);
     printf("R%d\n", R4);
 	NZVC(pc);
 }
@@ -280,7 +318,7 @@ void do_jmp() {
 	pc = dd.a;
 }
 void do_br() {
-	pc = pc + 2*xx;	
+	pc = pc + (2 * xx);	
 }
 void do_beq() {
 	if (Z == 1)
@@ -292,17 +330,40 @@ void do_jsr() {
 	r = pc
 	pc = d
 	*/
+	sp = sp + 2; //push
+	w_write(sp, reg[R4]);
+	reg[R4] = pc;
+	pc = dd.a;
+	printf("pc, %06o",pc);
 }
 void do_rts() {
-	
+	pc = reg[R6];
+	reg[R6] = w_read(sp);
+	sp = sp - 2; //pull
 }
 void do_bpl() {
+	printf("N is: %d, dd.val is: %06o\n", N, dd.val);
+	/*s
+	printf("\n");
+	mem_dump(0x208, 6);
+	*/
 	if (N == 0) {
 		do_br();
 	}
-	printf("%06o ", pc);
 }
 void do_tstb() {
+	/*
+	printf("dd.val is: %06o\n", dd.val);
+	printf("\n");
+	mem_dump(0x208, 6);
+	*/
+	
+	/*
+	NZVC(dd.val);
+	C = 0;
+	*/
+	N = (xx < 0) ? 1 : 0;
+    Z = (xx == 0) ? 1 : 0;
 }
 void do_unknown() {
 	printf(":(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
@@ -367,7 +428,7 @@ void run() {
 				if(cmd.param & HAS_NN)
 					nn = w & 63;
 				if(cmd.param & HAS_XX)
-					xx = w & 255;					
+					xx = (char)(w & 255);				
 				cmd.do_func();
 				printf("\n");
 				
@@ -376,6 +437,7 @@ void run() {
 				printf("* * * * * * * * * * * * *\n");
 				print_reg();
 				printf("* * * * * * * * * * * * *\n");
+				
 				break;
 			}
 		}
@@ -414,4 +476,5 @@ void test_mem() {
 	assert(b0 == 0x0b);
 	assert(b1 == 0x0b);
 }
+* bukharaev_pdp.exe < mode6neg.pdp.o
 */
