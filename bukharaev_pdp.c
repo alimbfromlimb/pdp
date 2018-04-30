@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -91,8 +91,8 @@ struct Command {
 	{0077000, 0177000, 	0, "sob",		do_sob, 	HAS_R4 | HAS_NN},
 	{0005000, 0177700, 	0, "clr",		do_clr, 	HAS_DD}, 
 	{0000100, 0177700, 	0, "jmp",		do_jmp, 	HAS_DD},
-	{0000400, 0177700,	0, "br",		do_br, 		HAS_XX},
-	{0001400, 0177700,	0, "beq",		do_beq,		HAS_XX},		
+	{0000400, 0177400,	0, "br",		do_br, 		HAS_XX},
+	{0001400, 0177400,	0, "beq",		do_beq,		HAS_XX},		
 	{0000200, 0177770, 	0, "rts",      	do_rts,     HAS_R6},
 	{0004000, 0177000, 	0, "jsr",       do_jsr,     HAS_R4 | HAS_DD},
 	{0105700, 0177700, 	1, "tstb",     	do_tstb,    HAS_DD},
@@ -134,7 +134,7 @@ struct SSDD get_mode (word w) {
 				else {
 					printf(" #%o ", result.val);
 				}
-				reg[n] = ((BYTE)&(n!=6)&(n!=7)) ? (reg[n] + 1) : (reg[n] + 2);
+				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] + 1) : (reg[n] + 2);
 				break;		
 		case 3:
 				result.a = w_read(reg[n]);
@@ -152,7 +152,7 @@ struct SSDD get_mode (word w) {
 				reg[n] += 2;				
 				break;
 		case 4:
-				reg[n] = ((BYTE)&(n!=6)&(n!=7)) ? (reg[n] - 1) : (reg[n] - 2);
+				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] - 1) : (reg[n] - 2);
 				result.a = reg[n];
 				if (BYTE) {
 					result.val = b_read(result.a);
@@ -239,9 +239,14 @@ void trace(int dbg_lvl, char * format, ...) {
 }
 void print_reg() {
 	int i;
-	for (i = 0; i < 8; ++i) {
-		printf("R%d : %.6o\n", i, reg[i]);
+	for (i = 0; i < 4; ++i) {
+		printf("R%d : %.6o ", i, reg[i]);
 	}
+	printf("\n");
+	for (i = 4; i < 8; ++i) {
+		printf("R%d : %.6o ", i, reg[i]);
+	}
+	printf("\n");
 }
 void b_write (adr a, byte x) {
 	if (a > 15) {
@@ -362,8 +367,10 @@ void do_tstb() {
 	NZVC(dd.val);
 	C = 0;
 	*/
+	
 	N = (xx < 0) ? 1 : 0;
-    Z = (xx == 0) ? 1 : 0;
+    Z = (xx == 0);
+    C = 0;
 }
 void do_unknown() {
 	printf(":(9(((99( I DON'T KNOW WHAT TO DO!!!\n");
@@ -477,4 +484,5 @@ void test_mem() {
 	assert(b1 == 0x0b);
 }
 * bukharaev_pdp.exe < mode6neg.pdp.o
+* bukharaev_pdp.exe < 0arr.txt.o
 */
