@@ -73,7 +73,7 @@ short int N, Z, V, C, BYTE;
 
 #define odata 0177566
 #define ostat 0177564
-
+#define ocsr  0177564
 
 struct Command {
 	word opcode;
@@ -136,7 +136,7 @@ struct SSDD get_mode (word w) {
 				}
 				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] + 1) : (reg[n] + 2);
 				break;		
-		case 3:
+		case 3: 	
 				result.a = w_read(reg[n]);
 				if (BYTE) {
 					result.val = b_read(result.a);
@@ -149,7 +149,7 @@ struct SSDD get_mode (word w) {
 				else {
 					printf(" @#%o ", result.val);
 				}
-				reg[n] += 2;				
+				reg[n] += 2;			
 				break;
 		case 4:
 				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] - 1) : (reg[n] - 2);
@@ -216,7 +216,6 @@ struct SSDD get_mode (word w) {
 				break;		 				
 		default:
 				printf("Esche ne prohodily 7:( \n");
-				break;
 	}
 	return result;
 }
@@ -228,6 +227,7 @@ int main() {
 	load_file();
 	//mem_dump(0x40, 4);
 	mem_dump(0x200, 0xc);
+	w_write(ocsr, 0xFFFF);
 	run();
 	return 0;
 }
@@ -353,7 +353,7 @@ void do_rts() {
 	sp = sp - 2; //pull
 }
 void do_bpl() {
-	printf("N is: %d, dd.val is: %06o\n", N, dd.val);
+	//printf("N is: %d, dd.val is: %06o\n", N, dd.val);
 	/*s
 	printf("\n");
 	mem_dump(0x208, 6);
@@ -441,13 +441,16 @@ void run() {
 				if(cmd.param & HAS_XX)
 					xx = (char)(w & 255);				
 				cmd.do_func();
-				printf("\n");
-				
+				//printf("\n");
+				//printf("dd.a is: %06o, dd.val is: %06o.", dd.a, dd.val);
+				//мб стоит напечатать dd val после do_func?
 				// WHAT'S INSIDE THE REGISTERS AT THE MOMENT???
+				//printf("\n");
+				//printf(": %06o", b_read(w_read(reg[7])));
 				printf("\n");
-				printf("* * * * * * * * * * * * *\n");
+				printf("-----------------------------------------------\n");
 				print_reg();
-				printf("* * * * * * * * * * * * *\n");
+				printf("-----------------------------------------------\n");
 				
 				break;
 			}
