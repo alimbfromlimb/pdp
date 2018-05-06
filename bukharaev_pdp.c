@@ -1,3 +1,4 @@
+//IF SOMETHING DOES NOT WORK, FIRST OF GO TO W_WRITE AND TRY TO DECOMMENT &0XFF
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -122,8 +123,9 @@ struct SSDD get_mode (word w) {
 				
 				break;
 		case 2:
+				
 				result.a = reg[n];
-				if ((BYTE)&(n!=6)&(n!=7)) {
+				if ((BYTE)&&(n!=6)&&(n!=7)) {
 					result.val = b_read(result.a);
 				} else {
 					result.val = w_read(result.a);
@@ -135,7 +137,7 @@ struct SSDD get_mode (word w) {
 					printf(" #%o ", result.val);
 				}
 				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] + 1) : (reg[n] + 2);
-				break;		
+				break;	
 		case 3: 	
 				result.a = w_read(reg[n]);
 				if (BYTE) {
@@ -150,7 +152,7 @@ struct SSDD get_mode (word w) {
 					printf(" @#%o ", result.val);
 				}
 				reg[n] += 2;			
-				break;
+				break;				
 		case 4:
 				reg[n] = ((BYTE)&&(n!=6)&&(n!=7)) ? (reg[n] - 1) : (reg[n] - 2);
 				result.a = reg[n];
@@ -194,7 +196,16 @@ struct SSDD get_mode (word w) {
 					printf("%.6o(R%o) ", nn, n);
 				}
 				else {
-					printf(" #%o ", result.val);
+					//
+					if (result.a == odata) {
+						printf(",%.6o ", result.a);
+					}
+					else {
+						//
+						printf(" #%.6o ", result.val);
+						//
+					}
+					//
 				}
 				break;
 		case 7:
@@ -270,7 +281,7 @@ void w_write (adr a, word x) {
 		mem[a] = (byte)(x & 0xFF);
 		mem[a+1] = (byte)((x >> 8) & 0xFF);
 	} else {
-		reg[a] = x & 0xFF;
+		reg[a] = x /*& 0xFF*/;
 	}		
 }
 word w_read (adr a) {
@@ -312,6 +323,18 @@ void do_movb() {
 	//write(dd.a) = ss.val;
 	b_write(dd.a, ss.val);
 	NZVC(ss.val);
+	
+	FILE *f_out = NULL;
+	f_out = fopen("out.txt", "a");
+	if (f_out == NULL) {
+		perror("out.txt");  // печатаем ошибку открытия файла на чтение, быть может его нет; или файл есть, а у вас нет прав на чтение файла
+		exit(1);          // даже если тесты проверяющей системой не показаны, код возврата в тесте показан всегда
+	}	
+	
+	fputc(reg[0], f_out);
+	
+	fclose(f_out);
+
 	return;
 }
 void do_sob() {
@@ -341,7 +364,7 @@ void do_jsr() {
 	r = pc
 	pc = d
 	*/
-	sp = sp + 2; //push
+	sp = sp - 2; //push
 	w_write(sp, reg[R4]);
 	reg[R4] = pc;
 	pc = dd.a;
@@ -350,7 +373,7 @@ void do_jsr() {
 void do_rts() {
 	pc = reg[R6];
 	reg[R6] = w_read(sp);
-	sp = sp - 2; //pull
+	sp = sp + 2; //pull
 }
 void do_bpl() {
 	//printf("N is: %d, dd.val is: %06o\n", N, dd.val);
@@ -439,7 +462,9 @@ void run() {
 				if(cmd.param & HAS_NN)
 					nn = w & 63;
 				if(cmd.param & HAS_XX)
-					xx = (char)(w & 255);				
+					xx = (char)(w & 255);
+				printf("dd.a is: %06o, dd.val is: %06o.\n", dd.a, dd.val);
+				printf("ss.a is: %06o, ss.val is: %06o.\n", ss.a, ss.val);							
 				cmd.do_func();
 				//printf("\n");
 				//printf("dd.a is: %06o, dd.val is: %06o.", dd.a, dd.val);
@@ -448,6 +473,7 @@ void run() {
 				//printf("\n");
 				//printf(": %06o", b_read(w_read(reg[7])));
 				printf("\n");
+				
 				printf("-----------------------------------------------\n");
 				print_reg();
 				printf("-----------------------------------------------\n");
@@ -493,4 +519,5 @@ void test_mem() {
 * bukharaev_pdp.exe < mode6neg.pdp.o
 * bukharaev_pdp.exe < 0arr.txt.o
 * bukharaev_pdp.exe < char.pdp.o
+* bukharaev_pdp.exe < hello.pdp.o
 */
