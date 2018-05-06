@@ -265,30 +265,73 @@ void print_reg() {
 	}
 	printf("\n");
 }
+void b_write(adr a, byte x) {
+	//printf("val=%06o,  (val >> 8)=%06o, val | 0xFF=%06o,",val,(val >> 8), val | 0xFF);
+	if (a < 8) {
+		if ((x >> 7) == 0)
+			reg[a] = x;
+		else {
+			reg[a] = x | 0xff00;
+		}
+	}
+	else {
+		mem[a] = x;
+	}
+	
+}
+/*
 void b_write (adr a, byte x) {
 	if (a > 15) {
-		mem[a] = x;
+		mem[a] = x & 0xFF;
 	} else {
 		reg[a] = x & 0xFF;
 	}			
 }
+*/
+byte b_read (adr a) {
+	byte x;
+	x = (a > 7) ? (mem[a]) : (reg[a]);
+	return x;
+}
+/*
 byte b_read (adr a) {
 	return mem[a];	
 }
+*/
+void w_write(adr a, word x) { 
+	
+	if (a < 8){
+		reg[a] = x;
+		printf("reg{%d}=%.6o--val=%.6o", a, reg[a], x);
+	}
+	else {
+		mem[a] = x&0xFF;
+		mem[a + 1] = (x >> 8)&0xFF;
+	}
+}
+/*
 void w_write (adr a, word x) {
 	if (a > 15) {
 		assert(!(a % 2));
 		mem[a] = (byte)(x & 0xFF);
 		mem[a+1] = (byte)((x >> 8) & 0xFF);
 	} else {
-		reg[a] = x /*& 0xFF*/;
+		reg[a] = x & 0xFFFF;
 	}		
 }
+*/
+/*
 word w_read (adr a) {
     word res;
     assert (a % 2 == 0);
     res = (word)(mem[a]) | (word)(mem[a+1] << 8);
     return res;        
+}
+*/
+word w_read (adr a) { 
+    word x = 0;
+	x = (a > 7) ? (((x | mem[a + 1]) << 8) | mem[a]) : reg[a];
+    return (word)x;
 }
 void do_halt() {
 	printf("\n");
@@ -298,31 +341,31 @@ void do_halt() {
 }
 void do_add() {
 	//write(dd.a) = ss.val + dd.val;
-	w_write(dd.a, dd.val + ss.val);
+	w_write(dd.a, ((dd.val + ss.val) & 0xFFFF));
 	/*
 	printf("dd.val is: %06o\n", dd.val);
 	printf("dd.val+ss.val is: %06o\n", dd.val+ss.val);
 	printf("\n");
 	mem_dump(0x208, 6);
 	*/
-	NZVC(dd.val + ss.val);
+	NZVC((dd.val + ss.val) & 0xFFFF);
 	return;
 }
 void do_mov() {
 	//write(dd.a) = ss.val;
-	w_write(dd.a, ss.val);
+	w_write(dd.a, (ss.val & 0xFFFF));
 	/*
 	printf("ss.val is: %06o\n", ss.val);
 	printf("\n");
 	mem_dump(0x208, 6);
 	*/
-	NZVC(ss.val);
+	NZVC(ss.val & 0xFFFF);
 	return;
 }
 void do_movb() {
 	//write(dd.a) = ss.val;
-	b_write(dd.a, ss.val);
-	NZVC(ss.val);
+	b_write(dd.a, ss.val & 0xFF);
+	NZVC(ss.val & 0xFF);
 	
 	FILE *f_out = NULL;
 	f_out = fopen("out.txt", "a");
@@ -340,7 +383,7 @@ void do_movb() {
 void do_sob() {
     reg[R4]--;
     if (reg[R4] != 0)
-        pc = pc - (2 * nn);
+        pc = (pc - (2 * nn)) & 0xFFFF;
     printf("R%d\n", R4);
 	NZVC(pc);
 }
@@ -352,7 +395,7 @@ void do_jmp() {
 	pc = dd.a;
 }
 void do_br() {
-	pc = pc + (2 * xx);	
+	pc = (pc + (2 * xx)) & 0xFFFF;	
 }
 void do_beq() {
 	if (Z == 1)
@@ -364,16 +407,16 @@ void do_jsr() {
 	r = pc
 	pc = d
 	*/
-	sp = sp - 2; //push
-	w_write(sp, reg[R4]);
-	reg[R4] = pc;
-	pc = dd.a;
+	sp = (sp - 2) & 0xFFFF; //push
+	w_write(sp, reg[R4] & 0xFFFF);
+	reg[R4] = pc & 0xFFFF;
+	pc = dd.a & 0xFFFF;
 	printf("pc, %06o",pc);
 }
 void do_rts() {
-	pc = reg[R6];
-	reg[R6] = w_read(sp);
-	sp = sp + 2; //pull
+	pc = reg[R6] & 0xFFFF;
+	reg[R6] = w_read(sp) & 0xFFFF;
+	sp = (sp + 2)  & 0xFFFF; //pull
 }
 void do_bpl() {
 	//printf("N is: %d, dd.val is: %06o\n", N, dd.val);
@@ -391,7 +434,7 @@ void do_tstb() {
 	printf("\n");
 	mem_dump(0x208, 6);
 	*/
-	NZVC(dd.val);
+	NZVC(dd.val & 0xFFFF);
 	C = 0;
 	/*
 	N = (xx < 0) ? 1 : 0;
@@ -463,8 +506,8 @@ void run() {
 					nn = w & 63;
 				if(cmd.param & HAS_XX)
 					xx = (char)(w & 255);
-				printf("dd.a is: %06o, dd.val is: %06o.\n", dd.a, dd.val);
-				printf("ss.a is: %06o, ss.val is: %06o.\n", ss.a, ss.val);							
+				//printf("dd.a is: %06o, dd.val is: %06o.\n", dd.a, dd.val);
+				//printf("ss.a is: %06o, ss.val is: %06o.\n", ss.a, ss.val);							
 				cmd.do_func();
 				//printf("\n");
 				//printf("dd.a is: %06o, dd.val is: %06o.", dd.a, dd.val);
@@ -516,8 +559,12 @@ void test_mem() {
 	assert(b0 == 0x0b);
 	assert(b1 == 0x0b);
 }
-* bukharaev_pdp.exe < mode6neg.pdp.o
-* bukharaev_pdp.exe < 0arr.txt.o
-* bukharaev_pdp.exe < char.pdp.o
-* bukharaev_pdp.exe < hello.pdp.o
+** bukharaev_pdp.exe < mode6neg.pdp.o
+*** bukharaev_pdp.exe < 0arr.txt.o
+*** bukharaev_pdp.exe < char.pdp.o
+** bukharaev_pdp.exe < hello.pdp.o
+*** bukharaev_pdp.exe < sumvar_byte.txt.o
+* bukharaev_pdp.exe < mode4.txt.o
+*** bukharaev_pdp.exe < putstr.pdp.o
+** bukharaev_pdp.exe < mode67.pdp.o
 */
