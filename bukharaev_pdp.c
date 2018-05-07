@@ -150,7 +150,7 @@ struct SSDD get_mode (word w) {
 					printf("@(R%d)+ ", n);
 				}
 				else {
-					printf(" @#%o ", result.val);
+					printf(" @#%o ", result.a);
 				}
 				reg[n] += 2;			
 				break;				
@@ -162,12 +162,12 @@ struct SSDD get_mode (word w) {
 				} else {
 					result.val = w_read(result.a);
 				}
-				if (n != 7) {
-					printf("-(R%d) ", n);
-				}
-				else {
-					printf(" #%o ", result.val);
-				}
+				//~ if (n != 7) {
+						printf("-(R%d) ", n);
+				//~ }
+				//~ else {
+					//~ printf(" #%o ", result.val);
+				//~ }
 				break;
 		case 5:
 				reg[n] -= 2;
@@ -177,12 +177,12 @@ struct SSDD get_mode (word w) {
 				} else {
 					result.val = w_read(result.a);
 				}
-				if (n != 7) {
-					printf("@-(R%d) ", n);
-				}
-				else {
-					printf(" #%o ", result.val);
-				}
+				//~ if (n != 7) {
+						printf("@-(R%d) ", n);
+				//~ }
+				//~ else {
+					//~ printf(" #%o ", result.val);
+				//~ }
 				break;
 		case 6:
 				nn = w_read(pc);
@@ -197,7 +197,7 @@ struct SSDD get_mode (word w) {
 					printf("%.6o(R%o) ", nn, n);
 				}
 				else {
-					printf(" #%.6o ", result.val);
+					printf(" %.6o ", result.a);
 				}
 				break;
 		case 7:
@@ -214,7 +214,7 @@ struct SSDD get_mode (word w) {
 					printf("@%.6o(R%o) ", nn, n);
 				}
 				else {
-					printf(" #%o ", result.val);
+					printf(" @%.6o ", result.a);
 				}
 				break;		 				
 		default:
@@ -328,7 +328,7 @@ void do_movb() {
 	//write(dd.a) = ss.val;
 	b_write(dd.a, ss.val & 0xFF);
 	NZVC(ss.val & 0xFF);
-	if (mode == 3) {
+	if (dd.a == 0177566) {
 		FILE *f_out = NULL;
 		f_out = fopen("out.txt", "a");
 		if (f_out == NULL) {
@@ -358,12 +358,14 @@ void do_jmp() {
 	pc = dd.a;
 }
 void do_br() {
-	pc = (pc + (2 * xx)) & 0xFFFF;	
+	pc = (pc + (2 * xx)) & 0xFFFF;
+	printf("  %.6o", reg[7]);	
 }
 void do_beq() {
+	printf(" %.6o", (pc + (2 * xx)) & 0xFFFF);
 	if (Z == 1)
 		do_br();
-	printf("%06o ", pc);
+	//printf("%06o ", pc);
 }
 void do_jsr() {
 	/*
@@ -374,12 +376,14 @@ void do_jsr() {
 	w_write(sp, reg[R4] & 0xFFFF);
 	reg[R4] = pc & 0xFFFF;
 	pc = dd.a & 0xFFFF;
-	printf("pc, %06o",pc);
+	//printf("pc, %06o",pc);
+	printf(",R%d", R4);
 }
 void do_rts() {
 	pc = reg[R6] & 0xFFFF;
 	reg[R6] = w_read(sp) & 0xFFFF;
 	sp = (sp + 2)  & 0xFFFF; //pull
+	printf(" R%d", R6);
 }
 void do_bpl() {
 	//printf("N is: %d, dd.val is: %06o\n", N, dd.val);
@@ -387,6 +391,7 @@ void do_bpl() {
 	printf("\n");
 	mem_dump(0x208, 6);
 	*/
+	printf(" %.6o", (pc + (2 * xx)) & 0xFFFF);
 	if (N == 0) {
 		do_br();
 	}
@@ -565,3 +570,4 @@ void test_mem() {
 *** bukharaev_pdp.exe < putstr.pdp.o
 ** bukharaev_pdp.exe < mode67.pdp.o
 */
+
