@@ -68,6 +68,7 @@ struct SSDD {
 } ss, dd;
 
 int R4, R6, nn, xx;
+int n, mode;
 //The only reason we need N, Z, V, C is to simplify the implementation
 //of some crazy functions
 short int N, Z, V, C, BYTE;
@@ -104,8 +105,8 @@ struct Command {
 
 struct SSDD get_mode (word w) {
 	struct SSDD result;
-	int n = w & 7;
-	int mode = (w>>3) & 7;
+	n = w & 7;
+	mode = (w>>3) & 7;
 	switch(mode) {
 		case 0:
 				result.a = n;
@@ -196,16 +197,7 @@ struct SSDD get_mode (word w) {
 					printf("%.6o(R%o) ", nn, n);
 				}
 				else {
-					//
-					if (result.a == odata) {
-						printf(",%.6o ", result.a);
-					}
-					else {
-						//
-						printf(" #%.6o ", result.val);
-						//
-					}
-					//
+					printf(" #%.6o ", result.val);
 				}
 				break;
 		case 7:
@@ -235,6 +227,13 @@ struct SSDD get_mode (word w) {
 ///////////////////////////////////////////////////
 
 int main() {
+	FILE *f_out = NULL;
+	f_out = fopen("out.txt", "w");
+	if (f_out == NULL) {
+		perror("out.txt");  // печатаем ошибку открытия файла на чтение, быть может его нет; или файл есть, а у вас нет прав на чтение файла
+		exit(1);          // даже если тесты проверяющей системой не показаны, код возврата в тесте показан всегда
+	}	
+	fclose(f_out);
 	load_file();
 	//mem_dump(0x40, 4);
 	mem_dump(0x200, 0xc);
@@ -266,70 +265,33 @@ void print_reg() {
 	printf("\n");
 }
 void b_write(adr a, byte x) {
-	//printf("val=%06o,  (val >> 8)=%06o, val | 0xFF=%06o,",val,(val >> 8), val | 0xFF);
 	if (a < 8) {
-		if ((x >> 7) == 0)
-			reg[a] = x;
-		else {
-			reg[a] = x | 0xff00;
-		}
+		reg[a] = (x >> 7) ? (x | 0xFF00) : x;
 	}
 	else {
 		mem[a] = x;
 	}
-	
 }
-/*
-void b_write (adr a, byte x) {
-	if (a > 15) {
-		mem[a] = x & 0xFF;
-	} else {
-		reg[a] = x & 0xFF;
-	}			
-}
-*/
 byte b_read (adr a) {
 	byte x;
 	x = (a > 7) ? (mem[a]) : (reg[a]);
 	return x;
 }
-/*
-byte b_read (adr a) {
-	return mem[a];	
-}
-*/
 void w_write(adr a, word x) { 
-	
 	if (a < 8){
 		reg[a] = x;
-		printf("reg{%d}=%.6o--val=%.6o", a, reg[a], x);
+		//printf("R[%d] was: %.6o now: %.6o\n", a, reg[a], x);
 	}
 	else {
-		mem[a] = x&0xFF;
-		mem[a + 1] = (x >> 8)&0xFF;
+		assert(!(a % 2));
+		mem[a] = x & 0xFF;
+		mem[a + 1] = (x >> 8) & 0xFF;
 	}
 }
-/*
-void w_write (adr a, word x) {
-	if (a > 15) {
-		assert(!(a % 2));
-		mem[a] = (byte)(x & 0xFF);
-		mem[a+1] = (byte)((x >> 8) & 0xFF);
-	} else {
-		reg[a] = x & 0xFFFF;
-	}		
-}
-*/
-/*
-word w_read (adr a) {
-    word res;
-    assert (a % 2 == 0);
-    res = (word)(mem[a]) | (word)(mem[a+1] << 8);
-    return res;        
-}
-*/
 word w_read (adr a) { 
     word x = 0;
+    if (a > 7)
+		assert(!(a % 2));
 	x = (a > 7) ? (((x | mem[a + 1]) << 8) | mem[a]) : reg[a];
     return (word)x;
 }
@@ -366,18 +328,19 @@ void do_movb() {
 	//write(dd.a) = ss.val;
 	b_write(dd.a, ss.val & 0xFF);
 	NZVC(ss.val & 0xFF);
+	if (mode == 3) {
+		FILE *f_out = NULL;
+		f_out = fopen("out.txt", "a");
+		if (f_out == NULL) {
+			perror("out.txt");  // печатаем ошибку открытия файла на чтение, быть может его нет; или файл есть, а у вас нет прав на чтение файла
+			exit(1);          // даже если тесты проверяющей системой не показаны, код возврата в тесте показан всегда
+		}	
 	
-	FILE *f_out = NULL;
-	f_out = fopen("out.txt", "a");
-	if (f_out == NULL) {
-		perror("out.txt");  // печатаем ошибку открытия файла на чтение, быть может его нет; или файл есть, а у вас нет прав на чтение файла
-		exit(1);          // даже если тесты проверяющей системой не показаны, код возврата в тесте показан всегда
-	}	
-	
-	fputc(reg[0], f_out);
-	
-	fclose(f_out);
+		fputc(reg[0], f_out);
 
+	
+		fclose(f_out);
+	}
 	return;
 }
 void do_sob() {
@@ -516,11 +479,11 @@ void run() {
 				//printf("\n");
 				//printf(": %06o", b_read(w_read(reg[7])));
 				printf("\n");
-				
+				/*
 				printf("-----------------------------------------------\n");
 				print_reg();
 				printf("-----------------------------------------------\n");
-				
+				*/
 				break;
 			}
 		}
@@ -544,7 +507,41 @@ void NZVC(word x){
 /*
 #define LO(x) (x & 0xFF)
 #define HI(x) (((x>>8) & 0xFF))
-
+*/
+/*
+void b_write (adr a, byte x) {
+	if (a > 15) {
+		mem[a] = x & 0xFF;
+	} else {
+		reg[a] = x & 0xFF;
+	}			
+}
+*/
+/*
+byte b_read (adr a) {
+	return mem[a];	
+}
+*/
+/*
+void w_write (adr a, word x) {
+	if (a > 15) {
+		assert(!(a % 2));
+		mem[a] = (byte)(x & 0xFF);
+		mem[a+1] = (byte)((x >> 8) & 0xFF);
+	} else {
+		reg[a] = x & 0xFFFF;
+	}		
+}
+*/
+/*
+word w_read (adr a) {
+    word res;
+    assert (a % 2 == 0);
+    res = (word)(mem[a]) | (word)(mem[a+1] << 8);
+    return res;        
+}
+*/
+/*
 void test_mem() {
 	byte b0, b1;
 	word w;
